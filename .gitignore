@@ -1,0 +1,3 @@
+# trang gitinore nay de chua cac file khong can thiet muon dua len github de an toan 
+.env
+node_modules
