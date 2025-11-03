@@ -2,14 +2,58 @@ import Task from "../models/Task.js";
 
 /* ================= GET ================= */
 export const getAllTasks = async (req, res) => {
+  const { filter = 'today' } = req.query;
+  const now = new Date();
+  let startDate;
+
+  switch (filter) {
+    case 'today': {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      break;
+    }
+    case 'week': {
+      // Lấy thứ 2 (Monday) của tuần hiện tại
+      const day = (now.getDay() + 6) % 7; // 0=Sun -> 6, 1=Mon -> 0, ...
+      const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day);
+      startDate = monday;
+      break; // <<< BẮT BUỘC
+    }
+    case 'month': {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      break;
+    }
+    case 'all':
+    default: {
+      startDate = null;
+      break;
+    }
+  }
+
+  const query = startDate ? { createdAt: { $gte: startDate } } : {};
+
   try {
-      const tasks = await Task.find().sort({ createdAt: -1 });//sort by creteAt desc tuc la sap xep giam dan ;
-    res.status(200).json(tasks);
+    const result = await Task.aggregate([
+      { $match: query },
+      {
+        $facet: {
+          tasks: [{ $sort: { createdAt: -1 } }],
+          activeCount: [{ $match: { status: 'active' } }, { $count: 'count' }],
+          completedCount: [{ $match: { status: 'completed' } }, { $count: 'count' }],
+        },
+      },
+    ]);
+
+    const tasks = result?.[0]?.tasks ?? [];
+    const activeCount = result?.[0]?.activeCount?.[0]?.count ?? 0;
+    const completedCount = result?.[0]?.completedCount?.[0]?.count ?? 0;
+
+    res.status(200).json({ tasks, activeCount, completedCount });
   } catch (error) {
-    console.error("❌ Lỗi khi gọi getAllTasks:", error);
-    res.status(500).json({ message: "Lỗi hệ thống", error: error.message });
+    console.error('❌ Lỗi khi gọi getAllTasks:', error);
+    res.status(500).json({ message: 'Lỗi hệ thống', error: error.message });
   }
 };
+
 
 /* ================= CREATE ================= */
 export const createTask = async (req, res) => {
